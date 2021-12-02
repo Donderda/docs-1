@@ -102,7 +102,7 @@ Now we want to implement our new rule in the administration so that we can manag
 
 Create a new directory called `<plugin root>/src/Resources/app/administration/src/decorator`. In this directory we create a new file called `rule-condition-service-decoration.js`.
 
-{% code title="<plugin root>/src/Resources/app/administration/src/decorator/rule-condition-service-decoration.js" %}
+{% code title="<plugin root>src/Resources/app/administration/src/app/decorator/condition-type-data-provider.decorator.js" %}
 ```javascript
 import '../core/component/swag-lunar-eclipse';
 
@@ -127,6 +127,10 @@ We also have to create a `main.js` file in our administration sources directory 
 import './decorator/rule-condition-service-decoration';
 ```
 {% endcode %}
+
+{% hint style="info" %}
+It may be possible that rules, with your newly created condition, aren't selectable in some places inside the administration, e.g. inside the promotion module. This is because rules are "context aware". To learn more about that feature [click here]();
+{% endhint %}
 
 ### Custom rule component
 
@@ -199,3 +203,74 @@ The last step is, creating a template for our condition. We will create a new fi
 
 As you can see, our `sw-single-select` uses the previously created computed property `selectValues` as the `options` prop, and the value is saved into the variable `isLunarEclipse`. That's it, your rule is now fully integrated.
 
+## Context awarness
+
+Rules in the shopware administration are now aware of where they're assigned to. This means that a user won't be able to add a rule to a promotion when the rule contains the condition "Cart amount". This also works the other way around. The user won't be able to add a the condition "Cart amount" when the rule is already assigned to a promotion.
+
+It's possible to define where rules are able to be assigned to. We'll show you how.
+
+### Defining restrictions
+
+We previously added our condition inside the `ruleConditionDataProviderService`. And this is the place where we define restrictions for our rule. The goal is that the user won't be able to add rules to advanced prices of a product.
+
+First we get the already existing definition for the rule relation like so:
+
+{% code title="<plugin root>src/Resources/app/administration/src/app/decorator/condition-type-data-provider.decorator.js" %}
+```javascript
+// Inside the addServiceProviderDecorator method
+const restrictions = ruleConditionService.getAwarenessConfigurationByAssignmentName('productPrices');
+```
+{% endcode %}
+
+{% hint style="info" %}
+All possible relations can be found in `Shopware\Core\Content\Rule\RuleDefinition`;
+{% endhint %}
+
+Now we want to add our own configuration. Therefore we import the `merge` function from `Shopware.Utils.object` then we will call the `addAwarenessConfiguration` method.
+
+{% code title="<plugin root>src/Resources/app/administration/src/app/decorator/condition-type-data-provider.decorator.js" %}
+```javascript
+Shopware.Application.addServiceProviderDecorator('ruleConditionDataProviderService', (ruleConditionService) => {
+    // Your newly added conditions is here
+
+    const restrictions = ruleConditionService.getAwarenessConfigurationByAssignmentName('productPrices');
+
+    ruleConditionService
+        .addAwarenessConfiguration('productPrices', merge(restrictions, {
+            notEquals: [
+                'lunar_eclipse',
+            ],
+            equalsAny: [], // ignore property if not needed
+            snippet: 'sw-restricted-rules.restrictedAssignment.lunarEclipse',
+        }),
+});
+```
+{% endcode %}
+
+We'll explain what `notEquals` and `equalsAny` mean later. Now we just need a new snippet. You can [see here](../../administration/adding-snippets.md) how to add snippets to shopware 6. The path to the directory is: `<plugin root>src/Resources/app/administration/src/app/snippet`.
+
+After you've added the snippet you successfully definded resctrictions for you custom condition. If you now try to assign a rule with your condition to advanced prices you should see that it's not possible and the rule is disabled.
+
+What do `notEquals` and `equalsAny` actually mean. With these two properties you can define that rules, you want to assign to a specific relation i.e. `productPrices`, need to have at least one condition that is inside `equalsAny` if specified or should not have any condition inside of `notEquals` if specified.
+
+### Restricting rule assignements
+
+When you want to add a new rule select component to assign rules somewhere in shopware you should use the `sw-select-rule-create` component. With that you can ensure that the rules you don't want to be selectable aren't selectable.
+
+For that we need to write some twig code.
+
+{% hint style="info" %}
+If you don't know how to customize administration components [click here](../../administration/customizing-components.md).
+{% endhint %}
+
+{% code %}
+```text
+{% block example_twig_blog %}
+    <sw-select-rule-create
+        :restriction="productPrices"
+        @save-rule="[YOUR SAVE METHOD]">
+{% endblock %}
+```
+{% endcode %}
+
+That's it the component automatically fetches rules and marks them as disabled.
